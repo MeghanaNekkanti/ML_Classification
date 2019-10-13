@@ -41,7 +41,7 @@ def binary_train(X, y, loss="perceptron", w0=None, b0=None, step_size=0.5, max_i
         for i in range(max_iterations):
             prod_value = new_y * (X.dot(w) + b)
             prod_value = np.where(prod_value <= 0, 1, 0)
-            prod_value = prod_value * new_y / N
+            prod_value = prod_value * new_y / N  # average gradient
             w += step_size * (np.transpose(prod_value).dot(X))
             b += step_size * np.sum(prod_value)
             # print(w, b)
@@ -55,7 +55,7 @@ def binary_train(X, y, loss="perceptron", w0=None, b0=None, step_size=0.5, max_i
         for i in range(max_iterations):
             prod_value = new_y * (X.dot(w) + b)
             sgm = sigmoid(prod_value)
-            prod_value = sgm * new_y * np.exp(-prod_value) / N
+            prod_value = sgm * new_y * np.exp(-prod_value) / N  # average gradient
             w += step_size * (np.transpose(prod_value).dot(X))
             b += step_size * np.sum(prod_value)
         ############################################
@@ -79,6 +79,7 @@ def sigmoid(z):
     ############################################
     # TODO 3 : Edit this part to               #
     #          Compute value                   #
+
     value = np.reciprocal(1 + np.exp(-z))
     ############################################
 
@@ -101,27 +102,17 @@ def binary_predict(X, w, b, loss="perceptron"):
     N, D = X.shape
 
     if loss == "perceptron":
-        ############################################
-        # TODO 4 : Edit this if part               #
-        #          Compute preds                   #
+
         preds = np.zeros(N)
         preds = X.dot(w) + b
         preds = np.where(preds > 0, 1, 0)
-        ############################################
-
 
     elif loss == "logistic":
-        ############################################
-        # TODO 5 : Edit this if part               #
-        #          Compute preds                   #
+
         preds = np.zeros(N)
         prod_value = X.dot(w) + b
         preds = sigmoid(prod_value)
-       # print(preds)
         preds = np.where(preds > 0.5, 1, 0)
-       # print(preds)
-        ############################################
-        
 
     else:
         raise "Loss Function is undefined."
@@ -171,8 +162,17 @@ def multiclass_train(X, y, C,
         #          Compute w and b                 #
         w = np.zeros((C, D))
         b = np.zeros(C)
+        # print(N, D, C, "sizes")
+        for i in range(max_iterations):
+            idx = np.random.choice(N)
+            x_n = X[idx]
+            y_n = y[idx]
+            softmax_val = softmax_function(x_n, w, b, gd_type)
+            # print(softmax_val.shape, "SGD SOFT MAX SHAPE")
+            softmax_val[y_n] -= 1
+            w -= step_size * softmax_val.reshape(C, 1).dot(x_n.reshape(1, D))
+            b -= step_size * softmax_val
         ############################################
-
 
     elif gd_type == "gd":
         ############################################
@@ -180,8 +180,18 @@ def multiclass_train(X, y, C,
         #          Compute w and b                 #
         w = np.zeros((C, D))
         b = np.zeros(C)
+
+        for i in range(max_iterations):
+            softmax_val = softmax_function(X, w, b, gd_type)
+            # softmax_val = np.sum(softmax_val, axis=0)
+            labels_onehot = np.zeros([N, C])
+            labels_onehot[np.arange(N), y] = 1.0
+            softmax_val -= labels_onehot
+            w -= step_size * softmax_val.T.dot(X) / N
+            # print(w.shape)
+            b -= step_size * np.sum(softmax_val, axis=0) / N
+
         ############################################
-        
 
     else:
         raise "Type of Gradient Descent is undefined."
@@ -190,6 +200,19 @@ def multiclass_train(X, y, C,
     assert b.shape == (C,)
 
     return w, b
+
+
+def softmax_function(X, w, b, gd_type):
+
+    power_val = X.dot(w.T) + b
+    power_val -= power_val.max()
+    exp = np.exp(power_val)
+    if gd_type == "sgd":
+        result = exp / np.sum(exp)
+    elif gd_type == "gd":
+        result = exp / np.sum(exp, axis=1, keepdims=True)
+
+    return result
 
 
 def multiclass_predict(X, w, b):
@@ -206,11 +229,10 @@ def multiclass_predict(X, w, b):
     C is the number of classes
     """
     N, D = X.shape
-    ############################################
-    # TODO 8 : Edit this part to               #
-    #          Compute preds                   #
     preds = np.zeros(N)
-    ############################################
+    preds = X.dot(w.T) + b
+    # print(preds.shape)
+    preds = np.argmax(preds, axis=1)
 
     assert preds.shape == (N,)
     return preds
